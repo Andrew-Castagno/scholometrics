@@ -1,0 +1,86 @@
+---
+title: "Customer churn predictions"
+output: github_document
+---
+
+```{r}
+library(readr)
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+
+ch.df <- read_csv("churn_clean.csv")
+
+View(ch.df)
+```
+
+The goal of this project will ultimately be to predict customer churn for a telephone company from various predictive variables. First to do some exploratory data analysis.
+
+```{r}
+ch.df %>% skim
+#it would be nice to turn our churn variable into a binary or logical instead of a factor with "Yes" and "No" categories, so I will do that below.
+
+ch.df <- ch.df %>%
+  mutate(Churn = ifelse(Churn == "Yes", 1, 0))
+
+```
+
+There are 10000 rows of data and 49 independent variables, with a fairly even mix of categorical and numerical and it appears that cleaning has already been handled in this case. Let's do some basic plotting to investigate some of our predictors.
+
+
+It would make sense for there to be a higher churning proportion among those who experience more equipment failures. Let's investigate that. Taking the mean of a binary variable gives the proportion of 1's (proportion of churn in this case). There is also a lack of data for 4 and 6 equipment failures so we will filter those groups out. 
+
+```{r}
+#this code first selects just the yearly equipment failure and churn columns, filters for 3 failures or fewer, and then takes the proportion of customers who leave (proportion of churn). The ggplot portion then generates the plot.
+
+ch.df %>%
+  select(Yearly_equip_failure, Churn)%>%
+  filter(Yearly_equip_failure <= 3)%>%
+  group_by(Yearly_equip_failure)%>%
+  summarise(prop_churn = mean(Churn))%>%
+  ggplot(aes(x = Yearly_equip_failure, y = prop_churn, fill = Yearly_equip_failure))+
+  geom_col()+
+  theme_bw()+
+  theme(legend.position = 'none')+
+  labs(x = "Number of Equipment Failures", y = "Churn Rate")
+
+#somewhat paradoxically we see a decline in churn rate with increased equipment failures, this could mean any number of things, possibly those customers are just the ones that report failures and the customers who do not simply leave. In either case the difference is small. 
+```
+
+
+Let's now check the top 20 states for customer churn
+
+```{r}
+ch.df %>% 
+  select(State, Churn) %>%
+  group_by(State) %>%
+  summarise(prop = mean(Churn)) %>%
+  arrange(desc(prop))%>%
+  filter(prop >= .2772)%>%
+  ggplot(aes(fill = reorder(State, -prop), y = prop, x = reorder(State, -prop)))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  geom_col()+
+  labs(x='State or District', y="Proportion of Churn")
+```
+
+This shows that DC has exceptionally high customer churn (with a sample size of 14, which isn't too small for this dataset), with CT and Washington coming in second with a bit of a notable bump over the following states. We could also break it down further by city, looking at cities in CT and WA.
+
+```{r}
+ch.df %>% 
+  filter(State == "WA" | State == "CT") %>%
+  select(City, Churn) %>% 
+  group_by(City) %>%
+  #filtering cities with fewer than 4 samples
+  filter(n()>3) %>%
+  summarise(prop = mean(Churn)) %>%
+  arrange(desc(prop))%>%
+  ggplot(aes(fill = reorder(City, -prop), y = prop, x = reorder(City, -prop)))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  geom_col()+
+  labs(x='City (WA and CT)', y="Proportion of Churn")
+```
+
+
+Getting this granular is somewhat hard considering there aren't  many samples from each of these cities, however in a big-data scenario with hundreds of samples for each city this approach would work well, and would suggest issues with branches in those locations.

@@ -1,0 +1,42 @@
+
+Variable Descriptions:
+
+Continuous
+
+Children: number of children
+Income: annual income
+Outage_sec_perweek: number of seconds of telecom service outage each week for the customer
+Email: number of emails the customer has sent
+Contacts: number of times the customer has contacted our company
+Yearly_equip_failure: number of equipment failures in a year
+Tenure: the number of months the customer has stayed with the provider
+MonthlyCharge
+Bandwidth_GB_Year
+
+
+StreamingTV: Do they stream tv shows? (yes, no) 
+StreamingMovies: Do they stream movies? (yes, no)
+Techie: Whether or not a customer has technical skills according to a questionairre  (yes, no) 
+Contract: Contract time for a customer (month-to-month, one year, two year)
+Port_modem: does the customer have a portable modem? (yes, no)
+Multiple: Do they have multiple lines? (yes, no)
+OnlineSecurity: Did they purchase online security?  (yes, no) 
+OnlineBackup: Did they purchase an online backup? (yes, no)
+DeviceProtection: Did they purchase device protection? (yes, no) 
+TechSupport: Did they purchase technical support? (yes, no)
+Tablet: do they own a tablet? (yes, no)
+InternetService: what type of internet do they have? (DSL, fiber optic, None) 
+Phone: Did they sign up for phone service? (yes, no)
+
+
+
+
+The results of a survey ranking the 8 following items in degree of importance (1 = most important, 8 = least important):
+Item1: Timely response 
+Item2: Timely fixes
+Item3: Timely replacements 
+Item4: Reliability
+Item5: Options
+Item6: Respectful response 
+Item7: Courteous exchange 
+Item8: Evidence of active listening

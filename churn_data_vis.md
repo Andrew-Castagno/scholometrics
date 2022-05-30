@@ -1,4 +1,4 @@
-Customer churn predictions
+Customer Churn Visualizations
 ================
 
 ``` r
@@ -41,7 +41,7 @@ library(tidymodels)
     ## x dplyr::lag()      masks stats::lag()
     ## x yardstick::spec() masks readr::spec()
     ## x recipes::step()   masks stats::step()
-    ## • Use tidymodels_prefer() to resolve common conflicts.
+    ## • Learn how to get started at https://www.tidymodels.org/start/
 
 ``` r
 library(skimr)
@@ -60,13 +60,9 @@ ch.df <- read_csv("churn_clean.csv")
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
-``` r
-View(ch.df)
-```
-
 The goal of this project will ultimately be to predict customer churn
-for a telephone company from various predictive variables. First to do
-some exploratory data analysis.
+for a telephone company from various predictive variables. In this first
+file, we will do some exploratory data analytics and data visualization.
 
 ``` r
 ch.df %>% skim
@@ -150,7 +146,7 @@ Data summary
 #it would be nice to turn our churn variable into a binary or logical instead of a factor with "Yes" and "No" categories, so I will do that below.
 
 ch.df <- ch.df %>%
-  mutate(Churn = ifelse(Churn == "Yes", 1, 0))
+  mutate(Churn = as.integer(ifelse(Churn == "Yes", 1, 0)))
 ```
 
 There are 10000 rows of data and 49 independent variables, with a fairly
@@ -161,8 +157,8 @@ investigate some of our predictors.
 It would make sense for there to be a higher churning proportion among
 those who experience more equipment failures. Let’s investigate that.
 Taking the mean of a binary variable gives the proportion of 1’s
-(proportion of churn in this case). There is also a lack of data for 4
-and 6 equipment failures so we will filter those groups out.
+(proportion of churn in this case). There is also a lack of data for 4,
+5, and 6 equipment failures so we will filter those groups out.
 
 ``` r
 #this code first selects just the yearly equipment failure and churn columns, filters for 3 failures or fewer, and then takes the proportion of customers who leave (proportion of churn). The ggplot portion then generates the plot.
@@ -176,14 +172,14 @@ ch.df %>%
   geom_col()+
   theme_bw()+
   theme(legend.position = 'none')+
-  labs(x = "Number of Equipment Failures", y = "Churn Rate")
+  labs(x = "Number of Equipment Failures Per Year", y = "Churn Proportion")
 ```
 
 ![](churn_data_vis_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
-
-``` r
-#somewhat paradoxically we see a decline in churn rate with increased equipment failures, this could mean any number of things, possibly those customers are just the ones that report failures and the customers who do not simply leave. In either case the difference is small. 
-```
+Somewhat paradoxically we see a decline in churn rate with increased
+equipment failures, this could mean any number of things, possibly those
+customers are just the ones that report failures and the customers who
+do not simply leave. In either case the difference is small.
 
 Let’s now check the top 20 states for customer churn
 
@@ -191,7 +187,7 @@ Let’s now check the top 20 states for customer churn
 ch.df %>% 
   select(State, Churn) %>%
   group_by(State) %>%
-  summarise(prop = mean(Churn)) %>%
+  summarise(prop = mean(Churn), num = n()) %>%
   arrange(desc(prop))%>%
   filter(prop >= .2772)%>%
   ggplot(aes(fill = reorder(State, -prop), y = prop, x = reorder(State, -prop)))+
@@ -204,10 +200,47 @@ ch.df %>%
 ![](churn_data_vis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 This shows that DC has exceptionally high customer churn (with a sample
-size of 14, which isn’t too small for this dataset), with CT and
-Washington coming in second with a bit of a notable bump over the
-following states. We could also break it down further by city, looking
-at cities in CT and WA.
+size of 14), with CT and Washington coming in second with a bit of a
+notable bump over the following states.
+
+Because this data has a geographical distribution, it may be nice to
+look at a map. Next we will generate a map of customer churn rates, this
+time ignoring DC due to its relatively low sample size and special
+status as a district rather than a state.
+
+``` r
+#We can pull latitude and longitude data for state polygons using the "map_data" function from ggplot2
+mapdata <- map_data("state")
+
+#R also comes with some built-in data, one of which is the state names and abbreviations, we will generate a dataframe from two of these vectors.
+states <- data.frame(region = tolower(state.name),state = state.abb)
+
+#This may be somewhat complicated, so I recommend running in batches of lines. The pipe function is being used a lot here, which "pushes" the contents of the previous line into the first input position of the following function. 
+
+ch.df %>% 
+  select(State, Churn) %>%
+#The three lines below group the data by state and then find the mean churn (% churn) by state, removing DC
+  group_by(State) %>%
+  summarise(prop = mean(Churn)*100) %>%
+  filter(State != "DC") %>%
+#the next two lines join our state positional data together with the main churning dataset, ultimately making use of the state abbreviations.
+  left_join(states, by = c("State" = "state"))%>%
+  left_join(mapdata, by = "region" ) %>%
+#next we plot the data
+  ggplot(aes(x = long, y = lat, group = region))+
+  geom_polygon(aes(fill = prop))+
+#everything below this point is just changing the plot aesthetically. Choosing pretty colors, making the background look prettier, changing labels, and removing ticks from the x and y axes. 
+  scale_fill_gradient(low = "yellow", high = palette()[2])+
+  labs(x= "", y = "", fill = "% Exit", title = "Percent Customer Exit by State")+
+  theme_bw()+
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```
+
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+Connecticut and Washington have particulaly high rates of customer
+churn, so it may be interesting to look at cities in these states more
+closely.
 
 ``` r
 ch.df %>% 
@@ -225,9 +258,37 @@ ch.df %>%
   labs(x='City (WA and CT)', y="Proportion of Churn")
 ```
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 Getting this granular is somewhat hard considering there aren’t many
 samples from each of these cities, however in a big-data scenario with
 hundreds of samples for each city this approach would work well, and
-would suggest issues with branches in those locations.
+could suggest issues with branches in those locations that could be
+resolved to improve customer retention.
+
+Next, it would be nice to look at how outage times impact customer
+retention. I will round the outage times to the nearest tenth of a
+second.
+
+``` r
+ch.df <- ch.df %>%
+  mutate(rounded_outage = round(Outage_sec_perweek, 1))
+
+
+ch.df %>%
+  select(rounded_outage, Churn) %>%
+  group_by(rounded_outage) %>%
+  #filtering so we have at least 11 samples we are taking our proportions from
+  filter(n() > 10) %>%
+  summarise(prop_churn = mean(Churn)) %>%
+  ggplot(aes(y = prop_churn, x = rounded_outage))+ 
+  geom_line()+
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  theme_bw()+
+  labs(x= "Seconds of Outage Per Week", y = 'Proportion of Churn')
+```
+
+    ## `geom_smooth()` using formula 'y ~ x'
+
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->

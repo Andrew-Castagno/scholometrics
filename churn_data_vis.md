@@ -232,7 +232,7 @@ ch.df %>%
 #everything below this point is just changing the plot aesthetically. Choosing pretty colors, making the background look prettier, changing labels, and removing ticks from the x and y axes. 
   scale_fill_gradient(low = "yellow", high = palette()[2])+
   labs(x= "", y = "", fill = "% Exit", title = "Percent Customer Exit by State")+
-  theme_bw()+
+  theme_void()+
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 ```
 
@@ -292,3 +292,77 @@ ch.df %>%
     ## `geom_smooth()` using formula 'y ~ x'
 
 ![](churn_data_vis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+We could also make a pie chart for churn rate by gender. Pie charts are
+tricky in ggplot, and require that you first create a bar plot and then
+make use of polar coordinates.
+
+``` r
+ch.df %>%
+#The following three lines take the Gender and Churn columns, and then find the proportion of customers who exit and the proportion retained.
+  select(Gender, Churn) %>%
+  group_by(Gender) %>%
+  summarize(Exited = mean(Churn), Retained = 1-mean(Churn)) %>%
+#Next we pivot longer in order to pull the exited and retained columns into one column, allowing for later facet wrapping. 
+  pivot_longer(cols = c("Exited", "Retained")) %>%
+#Now we initialize the plot, piping the transformed data into a ggplot object
+  ggplot( aes(x = "", y = value, fill = name))+
+#the following four lines create the plot, using stat = "identity" forces it to take the values directly from the dataset, and then coord_polar transforms the barplot into a pie chart. Theme_void gets rid of a lot of meaningless additional information, and then we remove the label for the legend as the labels are sufficient. 
+  geom_bar(stat = "identity")+
+  coord_polar("y", start = 0)+
+  theme_void()+
+  labs(fill = "")+
+#Facet wrapping by Gender breaks this into 3 pie charts, one for each gender identity. 
+  facet_wrap(~Gender)
+```
+
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+It appears that men are more likely than women or nonbinary individuals.
+If we want to know by exactly how much we can calculate it.
+
+``` r
+m_churn <- ch.df %>%
+  select(Gender, Churn) %>%
+  mutate(Gender = ifelse(Gender == "Male", "Male", "Female/Nonbinary"))%>%
+  group_by(Gender) %>%
+  summarize(Exited = mean(Churn))
+
+#the relative % difference between men and women/nonbinary for churn
+(m_churn[[2,2]]/m_churn[[1,2]] - 1)*100
+```
+
+    ## [1] 9.793699
+
+``` r
+#the absolute % difference between men an women/nonbinary for churn
+(m_churn[[2,2]]-m_churn[[1,2]]) * 100
+```
+
+    ## [1] 2.480101
+
+So men are on average \~9.8% more likely to leave the company than women
+or nonbinary individuals, with an absolute difference of 2.48% more
+churn among men. It could be that our company is not appealing to men as
+much as it is to women or nonbinary people, however this could also lack
+statistical significance. To check this we can run a simple statistical
+test, the chi square test.
+
+``` r
+chisq_data <- ch.df %>%
+  select(Gender, Churn) %>%
+  mutate(Gender = ifelse(Gender == "Male", "Male", "Female/Nonbinary"))
+
+#the chisq.test function expects factors for x and y, but can recognize that there are only two values for y, and therefore treats it as a factor despite being numerical data.
+chisq.test(x = chisq_data$Gender, y = chisq_data$Churn)
+```
+
+    ## 
+    ##  Pearson's Chi-squared test with Yates' continuity correction
+    ## 
+    ## data:  chisq_data$Gender and chisq_data$Churn
+    ## X-squared = 7.7474, df = 1, p-value = 0.005379
+
+The p value is .005379 and therefore we can say that there is a
+significant difference in churn rate for men and women at an alpha of
+.05.

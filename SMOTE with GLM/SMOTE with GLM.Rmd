@@ -1,0 +1,223 @@
+---
+title: "SMOTE with GLM"
+author: "Andrew Castagno"
+date: "5/30/2022"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(themis)
+library(skimr)
+
+ch.df <- read_csv("churn_clean.csv") %>%
+  mutate(Churn_bin = as.integer(ifelse(Churn == "Yes", 1, 0)), Zip = factor(Zip))
+```
+
+##Modeling
+
+
+Continuing from our data visualization example, next it would be nice to move on to some modeling. For two element categorical data such as customer churn, a logistic regression model is a simple place to start. 
+
+
+#Data prep
+
+First we should examine our variables to determine which may be valuable in generating a predictive model of customer churn. We will also want to check if any feature analysis is necessary. Conveniently, this dataset does not have any NA values, but this would also be the time where we would determine how to best handle those.
+
+```{r}
+skim(ch.df)
+```
+
+Customer id, CaseOrder, interaction, and UID are all unique to each individual and therefore would not be useful in generating a model and should be dropped. County, Zip, and city both also have a very high number of unique values relative to the size of the dataset and therefore should be dropped or engineered in some way. An example would be classifying those cities or counties by something like relative size within their state, or overall population size, and engineering a feature such as city_size or city_population. However, that would require data on the sizes of those cities and for now it should be fine to drop them, as a lot of that same information will be contained at the state level. 
+
+The final variable which is questionable is job, which has over 600 unique values. In the earlier data visualizations, it became clear that some jobs are associated with higher rates of customer churn. For now we will leave this variable in, but if there is overfitting then we can revisit it.
+
+```{r}
+model.df <- ch.df %>%
+  select(-c("Zip", "City", "County", "Customer_id", "CaseOrder", "Interaction", "UID", "Job", "Churn_bin"))
+
+prop.table(table(model.df$Churn))
+```
+
+There is a minor class imbalance in our response variable, with customer churn occurring in 26.5% of cases vs the 73.5% of cases in which there is customer retention. There are a few ways to deal with class imbalance like this, and here we will attempt a few different options and select the one that results in the best accuracy, specificity, and sensitivity in a logistic regression model. 
+
+This will all be handled with tidymodels.
+
+First we will split our data into training and testing sets.
+```{r}
+set.seed(111)
+
+#by specifying a strata, we will ensure that churn retains the same proportion in training and testing data. The proportion defaults to 3/4 training to 1/4 testing, which is plenty.
+
+c_split <- initial_split(model.df, strata = Churn)
+c_train <- training(c_split)
+c_test <- testing(c_split)
+#setting up cross validation folds
+c_folds <- vfold_cv(c_train)
+```
+
+Next we will set up our tidymodels recipe, in which we will specify that SMOTE is to be done to alleviate our class imbalance problem.
+
+```{r}
+c_rec <- recipe(Churn~., data = c_train) %>%
+  step_dummy(all_nominal(), -all_outcomes())%>%
+  step_smote(Churn)
+
+#If you wish to extract the SMOTE-ed data for analysis outside of the tidymodels framework, the following line is helpful
+#transformed_data <- c_rec %>% prep %>% juice
+
+#then creating a workflow
+c_wf <- workflow() %>%
+  add_recipe(c_rec)
+```
+
+
+
+#Logistic Regression Modeling 
+
+
+Now we will perform some logistic regression modeling, this model seeks to determine the log-odds of a customer ceasing to utilize the company's products. 
+
+
+
+```{r}
+glm_spec <- logistic_reg() %>% 
+  set_engine('glm')
+```
+
+
+```{r}
+doParallel::registerDoParallel()
+
+glm_rs <- c_wf %>% 
+  add_model(glm_spec) %>%
+  fit_resamples(
+    resamples = c_folds,
+    metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE))
+
+collect_metrics(glm_rs)
+```
+
+
+This model apparently does a great job of predicting customer churn, with accuracy (how accurately it assigns yes/no), specificity (the proportion of successfully identified positives), and sensitivity (the proportion of successfully identified negatives) all at around the .89 range. An ROC area under the curve of .957 is outstanding, further suggesting that our model far outperforms chance. Furthermore, kappa - which is a measurement of how well the model does compared to chance - is at .73, which according to Cohen's interpretation is a "substantial" level of agreement. 
+
+To finalize our model, we can make use of the "last_fit" command, which will train on our training set and test on our testing data.
+
+
+```{r}
+GLM_final <- c_wf %>%
+ add_model(glm_spec) %>%
+ last_fit(c_split,
+          metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity))
+
+collect_metrics(GLM_final)
+```
+
+And again we see high accuracy, specificity, and sensitivity, all near .88, along with a high kappa and very high ROC AUC. 
+
+Now let's compare to a model in which we do not perform SMOTE on our data.
+
+```{r}
+doParallel::registerDoParallel()
+#It's not necessary to convert all nominal variables into dummies because we are not smote-ing. These no smote variables will have "ns" in their names ns = no smote. 
+c_ns_rec <- recipe(Churn~., data = c_train)
+
+#then creating a workflow
+c_ns_wf <- workflow() %>%
+  add_recipe(c_ns_rec)
+
+#generating the logistic regression model
+glm_ns_rs <- c_ns_wf %>% 
+  add_model(glm_spec) %>%
+  fit_resamples(
+    resamples = c_folds,
+    metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE))
+
+collect_metrics(glm_ns_rs)
+```
+
+This resulted in a higher sensitivity by about .06, and a lower specificity by about .08. ROC auc is very slightly higher, but likely not in a statistically significant way. That being said, modeling without SMOTE may be better in this case, as it does a better job of capturing cases where customer's leave (positive cases of customer churn). Whether you choose to use the model in which the Churn variable has undergone SMOTE or not depends on whether you care more about positive predictive value (correctly identifying when a person will leave the company), or negative predictive value (correctly identifying when a customer will stay). Both models are performing very well, so it is a matter of priorities. 
+
+Finalizing the no smote model:
+
+```{r}
+GLM_ns_final <- c_ns_wf %>%
+ add_model(glm_spec) %>%
+ last_fit(c_split,
+          metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity))
+
+collect_metrics(GLM_ns_final)
+```
+
+Let's try one more method, this time reducing the size of our dataset and selecting an even number of samples from the two Churn classes.
+
+```{r}
+set.seed(111)
+#counting the number of samples with a "Yes" value for churn
+num_yes <- model.df %>% 
+  filter(Churn == "Yes") %>%
+  nrow()
+
+#Selecting an even number of samples with "No" values for churn from all of the data randomly, and then binding together with all of the samples with a "Yes" value for churn
+balanced.df <- model.df%>%
+  filter(Churn == "No") %>%
+  slice_sample(n = num_yes)%>%
+  rbind(filter(model.df, Churn == "Yes"))
+
+#Setting up splits again in this balanced data, adding "_b_" to the naming convention for "balanced"
+c_b_split <- initial_split(balanced.df, strata = Churn)
+c_b_train <- training(c_b_split)
+c_b_test <- testing(c_b_split)
+c_b_folds <- vfold_cv(c_b_train)
+```
+
+
+And now performing modeling on the balanced data. 
+
+
+```{r}
+#initializing parallel processing
+doParallel::registerDoParallel()
+#It's not necessary to convert all nominal variables into dummies because we are not smote-ing. These no smote variables will have "ns" in their names ns = no smote. 
+c_b_rec <- recipe(Churn~., data = c_b_train)
+
+#then creating a workflow
+c_b_wf <- workflow() %>%
+  add_recipe(c_b_rec)
+
+#generating the logistic regression model
+glm_b_rs <- c_b_wf %>% 
+  add_model(glm_spec) %>%
+  fit_resamples(
+    resamples = c_b_folds,
+    metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE))
+
+collect_metrics(glm_b_rs)
+```
+
+This model results in the highest specificity of all, along with a fairly high sensitivity. The kappa is also the highest of all our models, and the ROC auc is similar. 
+
+Finalizing this model.
+
+```{r}
+GLM_b_final <- c_b_wf %>%
+ add_model(glm_spec) %>%
+ last_fit(c_b_split,
+          metrics = metric_set(roc_auc, accuracy,kap, sensitivity, specificity))
+
+collect_metrics(GLM_b_final)
+```
+
+
+
+
+

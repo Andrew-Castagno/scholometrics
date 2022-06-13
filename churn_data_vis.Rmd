@@ -111,7 +111,7 @@ ch.df %>%
   ggplot(aes(x = long, y = lat, group = region))+
   geom_polygon(aes(fill = prop))+
 #everything below this point is just changing the plot aesthetically. Choosing pretty colors, making the background look prettier, changing labels, and removing ticks from the x and y axes. 
-  scale_fill_gradient(low = "yellow", high = palette()[2])+
+  scale_fill_gradient(low = "white", high = "#2f4894")+
   labs(x= "", y = "", fill = "% Exit", title = "Percent Customer Exit by State")+
   theme_void()+
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())

@@ -2,63 +2,11 @@ Customer Churn Visualizations
 ================
 
 ``` r
-library(readr)
 library(tidyverse)
-```
-
-    ## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.1 ──
-
-    ## ✓ ggplot2 3.3.5     ✓ dplyr   1.0.7
-    ## ✓ tibble  3.1.6     ✓ stringr 1.4.0
-    ## ✓ tidyr   1.1.4     ✓ forcats 0.5.1
-    ## ✓ purrr   0.3.4
-
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## x dplyr::filter() masks stats::filter()
-    ## x dplyr::lag()    masks stats::lag()
-
-``` r
-library(tidymodels)
-```
-
-    ## Registered S3 method overwritten by 'tune':
-    ##   method                   from   
-    ##   required_pkgs.model_spec parsnip
-
-    ## ── Attaching packages ────────────────────────────────────── tidymodels 0.1.4 ──
-
-    ## ✓ broom        0.7.10     ✓ rsample      0.1.1 
-    ## ✓ dials        0.0.10     ✓ tune         0.1.6 
-    ## ✓ infer        1.0.0      ✓ workflows    0.2.4 
-    ## ✓ modeldata    0.1.1      ✓ workflowsets 0.1.0 
-    ## ✓ parsnip      0.1.7      ✓ yardstick    0.0.9 
-    ## ✓ recipes      0.1.17
-
-    ## ── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
-    ## x scales::discard() masks purrr::discard()
-    ## x dplyr::filter()   masks stats::filter()
-    ## x recipes::fixed()  masks stringr::fixed()
-    ## x dplyr::lag()      masks stats::lag()
-    ## x yardstick::spec() masks readr::spec()
-    ## x recipes::step()   masks stats::step()
-    ## • Learn how to get started at https://www.tidymodels.org/start/
-
-``` r
 library(skimr)
 
 ch.df <- read_csv("churn_clean.csv")
 ```
-
-    ## Rows: 10000 Columns: 50
-
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## Delimiter: ","
-    ## chr (27): Customer_id, Interaction, UID, City, State, County, Area, TimeZone...
-    ## dbl (23): CaseOrder, Zip, Lat, Lng, Population, Children, Age, Income, Outag...
-
-    ## 
-    ## ℹ Use `spec()` to retrieve the full column specification for this data.
-    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
 The goal of this project will ultimately be to predict customer churn
 for a telephone company from various predictive variables. In this first
@@ -176,12 +124,41 @@ ch.df %>%
 ```
 
 ![](churn_data_vis_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
-Somewhat paradoxically we see a decline in churn rate with increased
+
+Somewhat paradoxically, we see a decline in churn rate with increased
 equipment failures, this could mean any number of things, possibly those
 customers are just the ones that report failures and the customers who
 do not simply leave. In either case the difference is small.
 
-Let’s now check the top 20 states for customer churn
+Next, let’s check if there is any difference in churn rate by job.
+
+``` r
+ch.df %>%
+  select(Job, Churn)%>%
+  group_by(Job)%>%
+  filter(n()>10)%>%
+  summarise(prop_churn = mean(Churn), count = n())%>%
+  arrange(desc(prop_churn))%>%
+  filter(prop_churn >= prop_churn[40])%>%
+  ggplot(aes(x = reorder(Job, -prop_churn), y = prop_churn, fill = prop_churn))+
+  geom_col()+
+  geom_hline(yintercept = mean(ch.df$Churn), color = 'orange', size = 1)+
+  theme_bw()+
+  theme(legend.position = 'none', axis.text.x = element_text(angle = 55, vjust = 1, hjust=1))+
+  labs(x = "Profession", y = "Proportion Exiting")
+```
+
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+This plot shows the proportion of individuals who left our company for
+each job for the 40 jobs with the highest churn, ordered by churn rate.
+Notably any jobs with fewer than 11 samples were dropped, so somehow we
+have more than 10 dramatherapists in our data set and they are not
+particularly happy with our product. The orange line represents the
+overall population churn rate, so all of these jobs are associated with
+significantly higher than average churn.
+
+Let’s now check the top 20 states for customer churn.
 
 ``` r
 ch.df %>% 
@@ -189,7 +166,7 @@ ch.df %>%
   group_by(State) %>%
   summarise(prop = mean(Churn), num = n()) %>%
   arrange(desc(prop))%>%
-  filter(prop >= .2772)%>%
+  filter(prop >= prop[20])%>%
   ggplot(aes(fill = reorder(State, -prop), y = prop, x = reorder(State, -prop)))+
   theme_bw()+
   theme(legend.position = "none")+
@@ -197,7 +174,7 @@ ch.df %>%
   labs(x='State or District', y="Proportion of Churn")
 ```
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 This shows that DC has exceptionally high customer churn (with a sample
 size of 14), with CT and Washington coming in second with a bit of a
@@ -236,7 +213,7 @@ ch.df %>%
   theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank())
 ```
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 Connecticut and Washington have particulaly high rates of customer
 churn, so it may be interesting to look at cities in these states more
@@ -258,13 +235,13 @@ ch.df %>%
   labs(x='City (WA and CT)', y="Proportion of Churn")
 ```
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
-Getting this granular is somewhat hard considering there aren’t many
-samples from each of these cities, however in a big-data scenario with
-hundreds of samples for each city this approach would work well, and
-could suggest issues with branches in those locations that could be
-resolved to improve customer retention.
+Getting this granular isn’t really effective here, considering there
+aren’t many samples from each of these cities. However, in a big-data
+scenario with hundreds of samples for each city this approach would work
+well and could suggest issues with branches in those locations that
+could be resolved to improve customer retention.
 
 Next, it would be nice to look at how outage times impact customer
 retention. I will round the outage times to the nearest tenth of a
@@ -291,7 +268,14 @@ ch.df %>%
 
     ## `geom_smooth()` using formula 'y ~ x'
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- --> It’s
+arguable if there really is an effect here. It seems like churn rate
+might slightly increase with more hours of outage, however I can get
+different relationships if I change the assumptions. For example, by
+binning to the hundredth of a second, or binning by the second. For now
+it looks as though there may be a slight positive correlation.
+
+\#Pie Chart
 
 We could also make a pie chart for churn rate by gender. Pie charts are
 tricky in ggplot, and require that you first create a bar plot and then
@@ -316,7 +300,7 @@ ch.df %>%
   facet_wrap(~Gender)
 ```
 
-![](churn_data_vis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](churn_data_vis_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 It appears that men are more likely than women or nonbinary individuals.
 If we want to know by exactly how much we can calculate it.
@@ -353,7 +337,7 @@ chisq_data <- ch.df %>%
   select(Gender, Churn) %>%
   mutate(Gender = ifelse(Gender == "Male", "Male", "Female/Nonbinary"))
 
-#the chisq.test function expects factors for x and y, but can recognize that there are only two values for y, and therefore treats it as a factor despite being numerical data.
+#the chisq.test function expects factors for x and y, but can recognize that there are only two values for y, and therefore treats it as a factor despite it being coded as numerical data.
 chisq.test(x = chisq_data$Gender, y = chisq_data$Churn)
 ```
 
@@ -364,5 +348,11 @@ chisq.test(x = chisq_data$Gender, y = chisq_data$Churn)
     ## X-squared = 7.7474, df = 1, p-value = 0.005379
 
 The p value is .005379 and therefore we can say that there is a
-significant difference in churn rate for men and women at an alpha of
-.05.
+significant difference in churn rate between men and women/nonbinary
+individuals at an alpha of .05. In proper statistical speak: we reject
+the null hypothesis that there is no relationship between churn and
+gender.
+
+Now that we have done some visualization and identified a few
+interesting relationships, it would be a good idea to do some modeling.
+This will be performed in the SMOTE with GLM file.

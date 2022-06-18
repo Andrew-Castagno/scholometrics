@@ -1,13 +1,9 @@
 ---
-title: "SMOTE with GLM"
+title: "Performing SMOTE and modeling customer churn"
 author: "Andrew Castagno"
 date: "5/30/2022"
 output: github_document
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
 
 ```{r, message = FALSE}

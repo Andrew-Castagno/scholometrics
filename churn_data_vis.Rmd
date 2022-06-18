@@ -89,14 +89,13 @@ Because this data has a geographical distribution, it may be nice to look at a m
 
 
 ```{r}
-
 #We can pull latitude and longitude data for state polygons using the "map_data" function from ggplot2
 mapdata <- map_data("state")
 
 #R also comes with some built-in data, one of which is the state names and abbreviations, we will generate a dataframe from two of these vectors.
 states <- data.frame(region = tolower(state.name),state = state.abb)
 
-#This may be somewhat complicated, so I recommend running in batches of lines. The pipe function is being used a lot here, which "pushes" the contents of the previous line into the first input position of the following function. 
+#If you are unfamiliar with the pipe function I recommend running this in batches of lines. The pipe function "pushes" the contents of the previous line into the first input position of the following function. 
 
 ch.df %>% 
   select(State, Churn) %>%
